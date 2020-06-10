@@ -1,0 +1,15 @@
+{
+  "name": "exporter",
+  "version": "1.0.0",
+  "description": "Exports Github issue details and events into CSV",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Viktor Charypar <viktor.charypar@red-badger.com>",
+  "license": "ISC",
+  "dependencies": {
+    "@octokit/graphql": "^4.5.0",
+    "@octokit/rest": "^17.11.0"
+  }
+}
