@@ -1,5 +1,5 @@
-import { getIssueEvents } from "../../../../exporter/src/index";
-import { formatFile } from "../../../../exporter/src/csv";
+import { getIssueEvents } from "../../../exporter/index";
+import { formatFile } from "../../../exporter/csv";
 
 const EVENT_TYPES = [
   "converted_note_to_issue",

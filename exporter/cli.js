@@ -1,5 +1,5 @@
-const { getIssueEvents } = require("./src/index.js");
-const { formatFile } = require("./src/csv.js");
+const { getIssueEvents } = require("./index.js");
+const { formatFile } = require("./csv.js");
 
 const API_KEY = process.env.API_KEY;
 const OWNER = "redbadger";
