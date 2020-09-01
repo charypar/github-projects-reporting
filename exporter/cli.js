@@ -6,9 +6,9 @@ const OWNER = process.env.REPO_OWNER;
 const REPO = process.env.REPO_NAME;
 
 const EVENT_TYPES = [
-  "converted_note_to_issue",
-  "added_to_project",
-  "moved_columns_in_project",
+  "ADDED_TO_PROJECT_EVENT",
+  "MOVED_COLUMNS_IN_PROJECT_EVENT",
+  "CONVERTED_NOTE_TO_ISSUE_EVENT",
 ];
 
 getIssueEvents(API_KEY, OWNER, REPO, EVENT_TYPES).then((events) => {
