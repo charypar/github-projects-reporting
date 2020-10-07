@@ -11,10 +11,10 @@
   },
   "author": "Viktor Charypar <charypar@gmail.com>",
   "dependencies": {
-    "@apollo/client": "^3.1.3",
-    "cross-fetch": "^3.0.5",
+    "@apollo/client": "^3.2.2",
+    "cross-fetch": "^3.0.6",
     "graphql": "^15.3.0",
-    "next": "^9.4.4",
+    "next": "^9.5.3",
     "react": "^16.13.1",
     "react-dom": "^16.13.1"
   }
