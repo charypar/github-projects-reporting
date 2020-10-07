@@ -1,4 +1,89 @@
-const { Octokit } = require("@octokit/rest");
+const { fetch } = require("cross-fetch");
+const {
+  ApolloClient,
+  InMemoryCache,
+  gql,
+  HttpLink,
+} = require("@apollo/client");
+
+const QUERY = gql`
+  query getEvents(
+    $owner: String!
+    $repo: String!
+    $eventTypes: [IssueTimelineItemsItemType!]
+    $after: String
+  ) {
+    repository(owner: $owner, name: $repo) {
+      id
+      issues(
+        first: 100
+        orderBy: { field: CREATED_AT, direction: DESC }
+        after: $after
+      ) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        edges {
+          node {
+            number
+            title
+            labels(first: 50) {
+              edges {
+                node {
+                  name
+                }
+              }
+            }
+            timelineItems(first: 100, itemTypes: $eventTypes) {
+              edges {
+                node {
+                  __typename
+                  ... on MovedColumnsInProjectEvent {
+                    actor {
+                      login
+                    }
+                    project {
+                      databaseId
+                    }
+                    from_column: previousProjectColumnName
+                    to_column: projectColumnName
+                    date: createdAt
+                  }
+                  ... on AddedToProjectEvent {
+                    actor {
+                      login
+                    }
+                    project {
+                      databaseId
+                    }
+                    to_column: projectColumnName
+                    date: createdAt
+                  }
+                  ... on ConvertedNoteToIssueEvent {
+                    actor {
+                      login
+                    }
+                    project {
+                      databaseId
+                    }
+                    to_column: projectColumnName
+                    date: createdAt
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+const EventTypeMap = {
+  AddedToProjectEvent: "added_to_project",
+  ConvertedNoteToIssueEvent: "converted_note_to_issue",
+  MovedColumnsInProjectEvent: "moved_columns_in_project",
+};
 
 exports.getIssueEvents = function getIssueEvents(
   apiKey,
@@ -6,52 +91,61 @@ exports.getIssueEvents = function getIssueEvents(
   repo,
   eventTypes
 ) {
-  // TODO add throttling https://github.com/octokit/plugin-throttling.js
-  const octokit = new Octokit({
-    auth: apiKey,
-    userAgent: "charypar/github-issues-reporting v0",
-    previews: ["starfox"],
-    timeZone: "Europe/London",
-    log: {
-      debug: () => {},
-      info: () => {},
-      warn: console.warn,
-      error: console.error,
-    },
+  const client = new ApolloClient({
+    link: new HttpLink({
+      uri: "https://api.github.com/graphql",
+      fetch,
+      headers: {
+        authorization: `bearer ${apiKey}`,
+        accept: "application/vnd.github.starfox-preview+json",
+      },
+    }),
+    cache: new InMemoryCache(),
   });
 
-  return octokit
-    .paginate(
-      "GET /repos/:owner/:repo/issues",
-      { owner, repo, state: "all" },
-      (response) => {
-        return response.data.map((issue) => {
-          const number = issue.number;
+  const nextPage = (previous) => ({
+    data: {
+      repository: { issues: issues },
+    },
+  }) => {
+    const all = previous.concat(issues.edges.map((it) => it.node));
 
-          return octokit.paginate(
-            "GET /repos/:owner/:repo/issues/:number/events",
-            { owner, repo, number },
-            (response) =>
-              response.data
-                .filter((event) => eventTypes.indexOf(event.event) >= 0) // FIXME can we filter in the request?
-                .map((event) => ({
-                  issue: number,
-                  title: issue.title,
-                  label_ids: issue.labels.map((label) => label.id),
-                  project_id: event.project_card.project_id,
-                  labels: issue.labels.map((label) => label.name),
-                  type: event.event,
-                  actor: event.actor.login,
-                  date: new Date(event.created_at),
-                  from_column:
-                    event.project_card &&
-                    event.project_card.previous_column_name,
-                  to_column:
-                    event.project_card && event.project_card.column_name,
-                }))
-          );
-        });
-      }
-    )
-    .then((resp) => Promise.all(resp).then((issues) => issues.flat()));
+    if (issues.pageInfo.hasNextPage) {
+      const after = issues.pageInfo.endCursor;
+
+      return client
+        .query({ query: QUERY, variables: { owner, repo, eventTypes, after } })
+        .then(nextPage(all));
+    } else {
+      return all;
+    }
+  };
+
+  return client
+    .query({
+      query: QUERY,
+      variables: { owner, repo, eventTypes },
+    })
+    .then(nextPage([]))
+    .then((issues) => {
+      return issues
+        .map((issue) => {
+          return issue.timelineItems.edges
+            .map(({ node: event }) => {
+              return {
+                issue: issue.number,
+                title: issue.title,
+                project_id: event.project.databaseId,
+                labels: issue.labels.edges.map((label) => label.node.name),
+                type: EventTypeMap[event.__typename],
+                actor: event.actor.login,
+                date: new Date(event.date),
+                from_column: event.from_column,
+                to_column: event.to_column,
+              };
+            })
+            .sort((a, b) => b.date.getTime() - a.date.getTime()); // sort by date descending
+        })
+        .flat();
+    });
 };
